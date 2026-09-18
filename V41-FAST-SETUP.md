@@ -1,12 +1,17 @@
 # DeepSeek V4.1 Flash, fast, on one Mac Studio
 
-> **⚠️ macOS 27 (Sept 18):** after upgrading to macOS 27, this branch stalls on
-> long prompts -- prefill hangs once the conversation history grows past roughly
-> 32k tokens. **On macOS 27, use [antirez/ds4#1073](https://github.com/antirez/ds4/pull/1073)
-> (kernelpool) instead, without DSpark.** On the same Mac and the same Q2 file it
-> measured 37 tok/s plain decode (vs 30.5 here) and read a real ~80k-token
-> project without stalling. DSpark on #1073 currently stalls in agent use on
-> macOS 27, so leave it off. Details in [V41-FAST-SETUP.md](V41-FAST-SETUP.md).
+> **⚠️ macOS 27 (Sept 18): don't set `DS4_METAL_NO_RESIDENCY` or
+> `DS4_METAL_DISABLE_QUEUE_KEEPALIVE`.** An earlier version of this guide
+> recommended them to free RAM when idle. On macOS 27 they cause multi-minute
+> freezes on long prompts, because the GPU driver rebuilds its map of the model
+> and hangs.
+>
+> The setup tested on macOS 27 is
+> [antirez/ds4#1073](https://github.com/antirez/ds4/pull/1073) (kernelpool) with
+> its own DSpark conversion and default memory settings: ~50 tok/s on short
+> answers, 47 at 10k context, 34 at 115k, no freezes. This branch was **not**
+> retested on macOS 27 with default memory settings. It may work, but it's
+> unconfirmed.
 
 This branch is **ivanfioravanti's `ds41f-dspark`** with one change on top:
 the parallel Engram reader is ungated for ordinary decode. Everything
@@ -53,13 +58,10 @@ cd ds4 && make
 `--power 100` is required; V4.1 refuses throttled operation. Deliberately
 no `--ssd-streaming`.
 
-Two environment settings keep the model reclaimable instead of wired, so
-it releases RAM when idle at the cost of ~1.2 s on the first request:
-
-```sh
-export DS4_METAL_NO_RESIDENCY=1
-export DS4_METAL_DISABLE_QUEUE_KEEPALIVE=1
-```
+**Leave the memory settings at their defaults.** `DS4_METAL_NO_RESIDENCY`
+and `DS4_METAL_DISABLE_QUEUE_KEEPALIVE` let the model release RAM when idle.
+On macOS 27 they cause multi-minute freezes; don't use them. With defaults the
+model stays pinned (~160 GB) while it runs and is freed when it exits.
 
 `DS4_ENGRAM_SERIAL_DECODE=1` restores the old serial Engram path if you
 want to A/B the change on your own hardware.

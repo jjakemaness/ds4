@@ -1,10 +1,15 @@
-> **⚠️ macOS 27 (Sept 18):** after upgrading to macOS 27, this branch stalls on
-> long prompts -- prefill hangs once the conversation history grows past roughly
-> 32k tokens. **On macOS 27, use [antirez/ds4#1073](https://github.com/antirez/ds4/pull/1073)
-> (kernelpool) instead, without DSpark.** On the same Mac and the same Q2 file it
-> measured 37 tok/s plain decode (vs 30.5 here) and read a real ~80k-token
-> project without stalling. DSpark on #1073 currently stalls in agent use on
-> macOS 27, so leave it off. Details in [V41-FAST-SETUP.md](V41-FAST-SETUP.md).
+> **⚠️ macOS 27 (Sept 18): don't set `DS4_METAL_NO_RESIDENCY` or
+> `DS4_METAL_DISABLE_QUEUE_KEEPALIVE`.** An earlier version of this guide
+> recommended them to free RAM when idle. On macOS 27 they cause multi-minute
+> freezes on long prompts, because the GPU driver rebuilds its map of the model
+> and hangs.
+>
+> The setup tested on macOS 27 is
+> [antirez/ds4#1073](https://github.com/antirez/ds4/pull/1073) (kernelpool) with
+> its own DSpark conversion and default memory settings: ~50 tok/s on short
+> answers, 47 at 10k context, 34 at 115k, no freezes. This branch was **not**
+> retested on macOS 27 with default memory settings. It may work, but it's
+> unconfirmed.
 
 > **This is a fork of [antirez/ds4](https://github.com/antirez/ds4).**
 > The fast DeepSeek V4.1 Flash configuration on this branch is almost
@@ -13,8 +18,10 @@
 > one change on top -- ungating the parallel Engram reader for ordinary
 > decode -- and a setup guide. See
 > **[V41-FAST-SETUP.md](V41-FAST-SETUP.md)** for numbers, build steps and
-> credit. The Engram change alone is submitted upstream as
-> [antirez/ds4#1072](https://github.com/antirez/ds4/pull/1072).
+> credit. The Engram change was submitted upstream as
+> [antirez/ds4#1072](https://github.com/antirez/ds4/pull/1072), since closed
+> in favor of [#1073](https://github.com/antirez/ds4/pull/1073), which includes
+> the same fix, done better.
 
 <p align="center">
   <img src="logo.svg" alt="DwarfStar logo" width="220">
