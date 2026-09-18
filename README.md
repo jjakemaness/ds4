@@ -1,3 +1,12 @@
+> **This branch is a tested setup, not new engine code.** It is
+> [antirez/ds4](https://github.com/antirez/ds4) with
+> [kernelpool's PR #1073](https://github.com/antirez/ds4/pull/1073), pinned at
+> the commit that was tested, plus launch scripts and a guide for running
+> DeepSeek V4.1 Flash at ~50 tok/s on one Mac Studio on macOS 27, including the
+> fix for the macOS 27 freezes. DSpark is
+> [ivanfioravanti](https://github.com/ivanfioravanti)'s work.
+> **Start here: [V41-MACOS27.md](V41-MACOS27.md).**
+
 <p align="center">
   <img src="logo.svg" alt="DwarfStar logo" width="220">
 </p>
