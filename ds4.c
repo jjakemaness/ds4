@@ -41860,9 +41860,13 @@ static DS4_MAYBE_UNUSED bool ds41_graph_step(ds41_gpu_graph *g, const ds4_model 
     ds4_engram_history next_history = g->history;
     if (!ds41_hash_tokens(g, &next_history, &token, 1, &ids[0][0])) return false;
 #ifdef __APPLE__
-    /* The TP worker has no drafter, but its allocated verifier identifies
+    /* Ivan's parallel reader fetches both Engram tables in one dispatch. It was
+     * gated to speculative sessions; ordinary decode fell back to 48 serial
+     * preads (~5.5ms/token of blocking SSD latency before any GPU work).
+     * Ungated here: measured 26.8 -> 30.5 tok/s on M3 Ultra, identical output.
+     * The TP worker has no drafter, but its allocated verifier identifies
      * the same speculative session after the first verification command. */
-    const bool parallel = (g->dspark || g->verify) && !ds41_image_at(g, g->pos) &&
+    const bool parallel = !ds41_image_at(g, g->pos) &&
         !getenv("DS4_METAL_DISABLE_V41_DSPARK_ENGRAM_PARALLEL");
     if (parallel && !ds41_engram_parallel(g->table, &ids[0][0], &g->rows[0][0], 1)) return false;
 #else

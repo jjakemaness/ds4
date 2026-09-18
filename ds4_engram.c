@@ -269,7 +269,15 @@ bool ds4_engram_read_batch(const ds4_engram_table *t, const uint32_t *rows,
             .out = out + start * DS4_ENGRAM_COLS * DS4_ENGRAM_DIM, .readers = 1};
         /* Fixed concurrency hides random-read latency without caching the table.
          * Each worker owns disjoint output rows; all finish before GPU use. */
-        if (count >= 256) {
+        /* Decode asks for DS4_ENGRAM_COLS rows per table, far below the old 256
+         * threshold, so single-token decode always fell back to serial reads:
+         * 48 rows x ~115us = ~5.5ms of blocking SSD latency before any GPU work.
+         * Measured on M3 Ultra: 5.55ms -> 1.12ms per token, 26.8 -> 30.5 tok/s,
+         * byte-identical output. DS4_ENGRAM_SERIAL_DECODE=1 restores the old
+         * threshold for A/B. */
+        static int par_min = -1;
+        if (par_min < 0) par_min = getenv("DS4_ENGRAM_SERIAL_DECODE") ? 256 : 8;
+        if (count >= (size_t)par_min) {
             batch.readers = ENGRAM_READERS;
 #ifdef __APPLE__
             dispatch_apply_f(batch.readers,
