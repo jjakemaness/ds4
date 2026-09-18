@@ -1,3 +1,11 @@
+> **⚠️ macOS 27 (Sept 18):** after upgrading to macOS 27, this branch stalls on
+> long prompts -- prefill hangs once the conversation history grows past roughly
+> 32k tokens. **On macOS 27, use [antirez/ds4#1073](https://github.com/antirez/ds4/pull/1073)
+> (kernelpool) instead, without DSpark.** On the same Mac and the same Q2 file it
+> measured 37 tok/s plain decode (vs 30.5 here) and read a real ~80k-token
+> project without stalling. DSpark on #1073 currently stalls in agent use on
+> macOS 27, so leave it off. Details in [V41-FAST-SETUP.md](V41-FAST-SETUP.md).
+
 > **This is a fork of [antirez/ds4](https://github.com/antirez/ds4).**
 > The fast DeepSeek V4.1 Flash configuration on this branch is almost
 > entirely [ivanfioravanti](https://github.com/ivanfioravanti)'s work
