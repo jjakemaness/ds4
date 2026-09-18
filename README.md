@@ -1,3 +1,13 @@
+> **This is a fork of [antirez/ds4](https://github.com/antirez/ds4).**
+> The fast DeepSeek V4.1 Flash configuration on this branch is almost
+> entirely [ivanfioravanti](https://github.com/ivanfioravanti)'s work
+> (his `ds41f-optimizations` and `ds41f-dspark` branches). This fork adds
+> one change on top -- ungating the parallel Engram reader for ordinary
+> decode -- and a setup guide. See
+> **[V41-FAST-SETUP.md](V41-FAST-SETUP.md)** for numbers, build steps and
+> credit. The Engram change alone is submitted upstream as
+> [antirez/ds4#1072](https://github.com/antirez/ds4/pull/1072).
+
 <p align="center">
   <img src="logo.svg" alt="DwarfStar logo" width="220">
 </p>
