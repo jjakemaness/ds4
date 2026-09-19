@@ -23,7 +23,7 @@ REAL=(model-00044-of-00048.safetensors model-00045-of-00048.safetensors model-00
 
 echo "1/4 downloading config, tokenizer, index and shards 44-46 (~8 GB)..."
 hf download "$HF_REPO" --revision "$REV" --local-dir "$SRC" \
-  --include config.json inference/config.json model.safetensors.index.json tokenizer.json "${REAL[@]}"
+  config.json inference/config.json model.safetensors.index.json tokenizer.json "${REAL[@]}"
 
 echo "2/4 making header-only placeholders for the other 45 shards..."
 mkdir -p "$STUB/inference"
