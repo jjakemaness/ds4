@@ -13,9 +13,34 @@ Decode is ds4-server's own counter. The final figure is a median of three
 with 128-token generations, which read ~10% low; measured that way the same
 three stages are 22.0 -> 28.4 -> 31.3.
 
+The two gains compound rather than add: +29% from the PR, then +22% on top of
+that, for +58% overall.
+
 For reference, ds4's QA table lists 24.74 tok/s decode and 437.62 t/s prefill
 for this model on a **512 GB** M3 Ultra. Prefill on 256 GB matched to within
 0.1%.
+
+## Before you start
+
+- **256 GB Apple Silicon.** The model is 178 GiB resident. A 512 GB machine
+  should be at least as fast; 128 GB will not hold it.
+- **~180 GiB free disk.** The conversion is in place and needs no extra space,
+  but the download does.
+- **Check your GPU memory limit.** macOS caps how much unified memory the GPU
+  may wire, and a low cap makes a 178 GiB model fail to load with an unhelpful
+  error:
+  ```
+  sysctl iogpu.wired_limit_mb
+  ```
+  `0` means no explicit cap, which is fine. A small number (a few thousand) is
+  not — some machines carry one over from a migrated LaunchDaemon. Raise it:
+  ```
+  sudo sysctl -w iogpu.wired_limit_mb=250000
+  ```
+  Add it to a LaunchDaemon if you want it to survive reboots. Leave the OS at
+  least ~8 GB.
+- **Python 3 with numpy**, for the converter: `pip install numpy`.
+- Measured on **macOS 27** (Darwin 27.0.0). Other versions untested.
 
 ## Setup
 
@@ -30,30 +55,45 @@ for this model on a **512 GB** M3 Ultra. Prefill on 256 GB matched to within
    git clone --branch ds41f-m3ultra-perf https://github.com/trueimage/ds4.git ~/ds4-m3perf
    cd ~/ds4-m3perf && make -j$(sysctl -n hw.ncpu) ds4-server
    ```
+   The path matters: `serve-glm-q4.sh` defaults to `~/ds4-m3perf`, and ds4 loads
+   its Metal shaders relative to the build directory. Override with `BUILD=`.
 
 3. **Fix the checkpoint.** The published GGUF ships its KDA attention weights at
-   BF16; ds4's own quantizer recipe says Q8_0. Convert in place (~3 min, no
-   extra disk):
+   BF16; ds4's own quantizer recipe says Q8_0. The converter lives at the repo
+   root, in `gguf-tools/`:
    ```
    python3 gguf-tools/glm53_kda_q8_inplace.py ~/ds4/gguf/GLM-5.3-Flash-Q4_K.gguf --dry-run
    python3 gguf-tools/glm53_kda_q8_inplace.py ~/ds4/gguf/GLM-5.3-Flash-Q4_K.gguf
    ```
-   Destructive and non-resumable. See `gguf-tools/README-glm53-kda-q8.md`.
+   Run the dry run first and read what it plans. The real run is destructive and
+   non-resumable: if it dies mid-write the file is unusable and you re-download.
+   Takes about 3 minutes for 178 GiB. It is idempotent, so a second run on an
+   already-converted file reports zero tensors and exits.
+
+   Details and the full tensor table: `gguf-tools/README-glm53-kda-q8.md`.
 
 4. **Serve:**
    ```
    ./glm53-m3ultra/serve-glm-q4.sh
    ```
+   Override paths with `BUILD=`, `G=` (gguf dir), `CTX=`, `PORT=`.
 
-`DS4_GLM_ENABLE_KDA_Q8_INPUTS=1` is set by the script and is required — it
-gates the Q8 KDA input path, which only works once the weights are Q8_0.
+`DS4_GLM_ENABLE_KDA_Q8_INPUTS=1` is set by the script and is required. It gates
+the Q8 KDA input path, which only works once the weights are actually Q8_0 —
+setting it before the conversion does nothing.
 
-## Benchmarking
+## Checking you got it
 
-`sweep-glm.sh` and `confirm-glm.sh` reload the model per config and report
-ds4-server's decode counter. Use 400-token generations and medians of three;
-single-run spread here is about 1.5 tok/s, which is enough to invent a trend
-that is not there.
+```
+curl -s localhost:8003/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model":"glm","messages":[{"role":"user","content":"Explain consensus algorithms in distributed systems."}],"max_tokens":400}' >/dev/null
+```
+Then read the decode rate off the server log. Expect ~34-35 tok/s.
+
+`sweep-glm.sh` and `confirm-glm.sh` automate this across configs, reloading the
+model each time. Use 400-token generations and medians of three: single-run
+spread here is about 1.5 tok/s, which is enough to invent a trend that is not
+there. I nearly published one.
 
 ## Things that did not help
 
@@ -67,14 +107,36 @@ that is not there.
 | `DS4_GLM_DECODE_SPLIT_BLOCK_ROWS` 4-64 | all within 0.14 tok/s of default |
 
 Speculative decoding loses on this chip. `--mtp-timing` puts the verify pass at
-~76 ms against a ~45 ms plain decode step.
+~76 ms against a ~45 ms plain decode step, so verification costs more than it
+saves even when drafts are accepted.
+
+## Why it was slow
+
+Decode on a fully-resident model is bound by bytes read per token:
+
+| Tensor group | Bytes/token | Share |
+| --- | ---: | ---: |
+| KDA attention (34 layers, BF16) | 8.48 GiB | 48% |
+| Routed experts (8 of 288 active) | 4.54 GiB | 26% |
+| DSA attention (12 layers, Q8_0) | 1.37 GiB | 8% |
+| Head, shared expert, dense FFN | 3.38 GiB | 19% |
+| **Total** | **17.77 GiB** | |
+
+GLM-5.3-Flash interleaves two attention types — DSA every fourth layer, KDA in
+the other 34. The DSA layers ship at Q8_0; the KDA layers ship at BF16. Half the
+per-token bandwidth was going to tensors stored at twice the precision of their
+neighbours. Converting takes it to 14.24 GiB/token.
+
+A CPU profile pointed at command-buffer submission and was misleading — that
+work runs on a separate dispatch thread, concurrent with the GPU. Counting bytes
+found the real problem.
 
 ## Credit
 
 - [antirez](https://github.com/antirez/ds4) — DwarfStar (ds4), and the
   quantisation recipe that made the stale checkpoint findable.
 - [trueimage](https://github.com/antirez/ds4/issues/1090) — PR #1090, the
-  larger of the two speedups (+29% of the +58%).
+  larger of the two speedups.
 - Zhipu / the GLM team — the model.
 
 Mine: spotting that the published Q4_K predates the recipe, the in-place
