@@ -2,6 +2,12 @@
   <img src="logo.svg" alt="DwarfStar logo" width="220">
 </p>
 
+> **M3 Ultra / DeepSeek V4.1 Flash 1017 branch.** This branch preserves the
+> tested PR #1073 Metal and DSpark optimizations while adding the matching 1017
+> text, vision, and draft-model setup. See
+> [V41-1017-M3-ULTRA.md](V41-1017-M3-ULTRA.md) for downloads, build commands,
+> launchers, cache isolation, provenance, and measured behavior.
+
 **DwarfStar** aims to be the best way to run a few excellent large
 language models on consumer hardware (that is, hardware that people
 can actually own). To reach this goal, we are building
